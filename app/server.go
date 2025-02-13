@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"net"
 	"os"
 )
@@ -11,19 +11,23 @@ var _ = net.Listen
 var _ = os.Exit
 
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Println("Logs from your program will appear here!")
+	infoLogger := log.New(os.Stdout, "INFO", log.Lshortfile)
+	errorLogger := log.New(os.Stderr, "ERROR", log.Lshortfile)
+	app := App{
+		infoLogger:  infoLogger,
+		errorLogger: errorLogger,
+	}
 
-	// Uncomment this block to pass the first stage
-	//
-	// l, err := net.Listen("tcp", "0.0.0.0:6379")
-	// if err != nil {
-	// 	fmt.Println("Failed to bind to port 6379")
-	// 	os.Exit(1)
-	// }
-	// _, err = l.Accept()
-	// if err != nil {
-	// 	fmt.Println("Error accepting connection: ", err.Error())
-	// 	os.Exit(1)
-	// }
+	app.infoLogger.Println("server starting at port 6379")
+
+	listner, err := net.Listen("tcp", "0.0.0.0:6379")
+	if err != nil {
+		app.errorLogger.Println("Failed to bind to port 6379")
+		os.Exit(1)
+	}
+	_, err = listner.Accept()
+	if err != nil {
+		app.errorLogger.Println("Error accepting connection: ", err.Error())
+		os.Exit(1)
+	}
 }
