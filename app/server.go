@@ -31,9 +31,13 @@ func main() {
 		app.errorLogger.Println("Failed to bind to port 6379")
 		os.Exit(1)
 	}
-	_, err = listner.Accept()
+
+	// blocking call
+	connection, err := listner.Accept()
 	if err != nil {
 		app.errorLogger.Println("Error accepting connection: ", err.Error())
 		os.Exit(1)
 	}
+	defer connection.Close()
+	connection.Write([]byte("+PONG\r\n"))
 }
