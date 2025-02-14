@@ -11,6 +11,7 @@ var _ = net.Listen
 var _ = os.Exit
 
 func main() {
+	// loggers
 	infoLogger := log.New(os.Stdout, "INFO", log.Lshortfile)
 	errorLogger := log.New(os.Stderr, "ERROR", log.Lshortfile)
 	app := App{
