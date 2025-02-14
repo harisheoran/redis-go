@@ -32,12 +32,34 @@ func main() {
 		os.Exit(1)
 	}
 
-	// blocking call
-	connection, err := listner.Accept()
-	if err != nil {
-		app.errorLogger.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
+	for {
+		// blocking call
+		connection, err := listner.Accept()
+		if err != nil {
+			app.errorLogger.Println("failed to accept connection: ", err.Error())
+			os.Exit(1)
+		}
+		defer connection.Close()
+
+		// read the connection input
+		data, err := readInput(connection)
+		if err != nil {
+			app.errorLogger.Println("failed to read input from client", err)
+		}
+
+		app.infoLogger.Println("recieved input from client", string(data))
+
+		// write
+		connection.Write([]byte("+PONG\r\n"))
 	}
-	defer connection.Close()
-	connection.Write([]byte("+PONG\r\n"))
+}
+
+func readInput(connection net.Conn) ([]byte, error) {
+	buffer := make([]byte, 1024)
+	_, err := connection.Read(buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	return buffer, nil
 }
