@@ -26,22 +26,31 @@ func main() {
 
 	app.infoLogger.Println("server starting at port 6379")
 
+	// establish socket connection
 	listner, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
 		app.errorLogger.Println("Failed to bind to port 6379")
 		os.Exit(1)
 	}
 
-	connection, err := listner.Accept()
 	for {
+		// blocking call
+		connection, err := listner.Accept()
 		if err != nil {
 			app.errorLogger.Println("failed to accept connection: ", err.Error())
 			os.Exit(1)
 		}
 		defer connection.Close()
 
+		// handle the connection
+		go app.handleConnection(connection)
+	}
+}
+
+func (app *App) handleConnection(connection net.Conn) {
+	for {
 		// read the connection input
-		data, err := readInput(connection)
+		data, err := app.readInput(connection)
 		if err != nil {
 			app.errorLogger.Println("failed to read input from client", err)
 		}
@@ -53,7 +62,7 @@ func main() {
 	}
 }
 
-func readInput(connection net.Conn) ([]byte, error) {
+func (app *App) readInput(connection net.Conn) ([]byte, error) {
 	buffer := make([]byte, 1024)
 	_, err := connection.Read(buffer)
 	if err != nil {
