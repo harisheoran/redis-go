@@ -32,9 +32,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	connection, err := listner.Accept()
 	for {
-		// blocking call
-		connection, err := listner.Accept()
 		if err != nil {
 			app.errorLogger.Println("failed to accept connection: ", err.Error())
 			os.Exit(1)
