@@ -16,6 +16,8 @@ const (
 	ARRAY         = '*'
 )
 
+var tempDb = make(map[string]string)
+
 // Redis RESP Parser
 // ROLE:
 // The parser only converts raw input into structured data.
@@ -51,27 +53,47 @@ func (app *App) respParser(input []byte) ([]string, error) {
 	return nil, nil
 }
 
+// ROLE: Read the integer
+// ex: $3, *13 $113
+func (app *App) readInteger(reader *bufio.Reader) (int, error) {
+	var fullNumber []byte
+	for {
+		number, err := reader.ReadByte()
+		if err != nil {
+			return -1, err
+		}
+		fullNumber = append(fullNumber, number)
+		if string(fullNumber[len(fullNumber)-1]) == "\r" {
+			fmt.Println("LENGTH is here:", len(string(fullNumber[:len(fullNumber)-1])), len(string(fullNumber[:len(fullNumber)-1])))
+			break
+		}
+	}
+
+	intLength, err := strconv.ParseInt(string(fullNumber[:len(fullNumber)-1]), 10, 64)
+	if err != nil {
+		return -1, err
+	}
+
+	return int(intLength), nil
+}
+
 func (app *App) respHandleArray(reader *bufio.Reader) ([]string, error) {
 	commandArray := make([]string, 0)
 	// 2. read the length of the Array
-	// ex: *4
-	length, err := reader.ReadByte()
+	// ex: *4 or *10 or *100
+	length, err := app.readInteger(reader)
 	if err != nil {
 		return commandArray, err
 	}
-	intLength, err := strconv.ParseInt(string(length), 10, 64)
-	if err != nil {
-		return commandArray, err
-	}
-	fmt.Println("Length: ", intLength)
+
+	fmt.Println("Length: ", length)
 
 	// 3. read the end of lines after length of the Array
-	// \r\n
-	reader.ReadByte()
+	// \n
 	reader.ReadByte()
 
 	fmt.Println("Intial length of array: ", len(commandArray))
-	for i := 0; i < int(intLength); i++ {
+	for i := 0; i < int(length); i++ {
 		// 4. read the size symbol
 		// ex: $
 		sizeSymbol, err := reader.ReadByte()
@@ -88,24 +110,23 @@ func (app *App) respHandleArray(reader *bufio.Reader) ([]string, error) {
 
 		// 5. read the size of first element
 		// ex: $4
-		size, err := reader.ReadByte()
+		size, err := app.readInteger(reader)
 		if err != nil {
 			return commandArray, err
 		}
-		intSize, _ := strconv.ParseInt(string(size), 10, 64)
-		fmt.Println("Size: ", intSize)
+		fmt.Println("Size: ", size)
 
 		// 5. read the rest of the input: \r\n
 		reader.ReadByte()
-		reader.ReadByte()
 
 		// 6. read the actual first element
-		element := make([]byte, intSize)
+		element := make([]byte, size)
 		_, err = reader.Read(element)
 		if err != nil {
 			return commandArray, err
 		}
 
+		fmt.Println("ADDING: ", string(element))
 		// 7. add commands to our array/slice
 		commandArray = append(commandArray, string(element))
 		fmt.Println(commandArray, len(commandArray))
@@ -131,7 +152,6 @@ func (app *App) handleCommands(commands []string) []byte {
 	mainCommand := commands[0]
 	switch {
 	case strings.EqualFold(mainCommand, "COMMAND"):
-		fmt.Println("HERE")
 		return []byte("+PONG\r\n")
 	case strings.EqualFold(mainCommand, "PING"):
 		return []byte("+PONG\r\n")
@@ -143,8 +163,35 @@ func (app *App) handleCommands(commands []string) []byte {
 			return []byte(res)
 		}
 		return nil
+	case strings.EqualFold(mainCommand, "SET"):
+		if len(commands) >= 3 {
+			return app.SET(commands[1], commands[2])
+		}
+		return []byte("-ERR not enough args: Key or Value missing\r\n")
+	case strings.EqualFold(mainCommand, "GET"):
+		if len(commands) >= 2 {
+			return app.GET(commands[1])
+		}
+		return []byte("-ERR not enough args: Key missing\r\n")
 	default:
 		return nil
 	}
+	return nil
+}
 
+// ROLE: handle the SET command
+func (app *App) SET(key, value string) []byte {
+	tempDb[key] = value
+	successResponse := []byte("+OK\r\n")
+	return successResponse
+}
+
+// ROLE: handle the GET command
+func (app *App) GET(key string) []byte {
+	value, ok := tempDb[key]
+	if !ok {
+		return []byte("-1\r\n")
+	}
+
+	return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(value), value))
 }

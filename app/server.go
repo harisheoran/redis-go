@@ -69,7 +69,6 @@ func (app *App) handleConnection(connection net.Conn) error {
 
 		// handle the commands accordingly
 		dataToSend := app.handleCommands(commands)
-		//dummeyDataToSend := []byte("+PONG\r\n")
 
 		// write to the connection
 		err = app.WriteToClient(connection, dataToSend)
@@ -98,6 +97,5 @@ func (app *App) WriteToClient(connection net.Conn, dataToSend []byte) error {
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
