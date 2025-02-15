@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -15,8 +16,6 @@ const (
 	BULK_STRING   = '$'
 	ARRAY         = '*'
 )
-
-var tempDb = make(map[string]string)
 
 // Redis RESP Parser
 // ROLE:
@@ -148,50 +147,48 @@ Write RESP Parser
 */
 
 // get the output according to input
-func (app *App) handleCommands(commands []string) []byte {
+func (app *App) handleCommands(commands []string) ([]byte, error) {
 	mainCommand := commands[0]
 	switch {
 	case strings.EqualFold(mainCommand, "COMMAND"):
-		return []byte("+PONG\r\n")
+		return []byte("+PONG\r\n"), nil
 	case strings.EqualFold(mainCommand, "PING"):
-		return []byte("+PONG\r\n")
+		return []byte("+PONG\r\n"), nil
 	case strings.EqualFold(mainCommand, "ECHO"):
 		if len(commands) > 1 {
 			size := len(commands[1])
 			res := fmt.Sprintf("$%d\r\n%s\r\n", size, commands[1])
-			fmt.Println("THIS here", res)
-			return []byte(res)
+			return []byte(res), nil
 		}
-		return nil
+		return nil, nil
 	case strings.EqualFold(mainCommand, "SET"):
-		if len(commands) >= 3 {
-			return app.SET(commands[1], commands[2])
+		if len(commands) >= 5 && strings.EqualFold(commands[3], "PX") {
+			expiry, err := strconv.ParseInt(commands[4], 10, 64)
+			if err != nil {
+				return nil, nil
+			}
+			return app.SET(
+				commands[1],
+				Value{
+					value:      commands[2],
+					expiration: time.Now().Add(time.Duration(expiry) * time.Millisecond),
+				},
+			), nil
+		} else if len(commands) >= 3 {
+			return app.SET(
+				commands[1],
+				Value{
+					value: commands[2],
+				},
+			), nil
 		}
-		return []byte("-ERR not enough args: Key or Value missing\r\n")
+		return []byte("-ERR not enough args: Key or Value missing\r\n"), nil
 	case strings.EqualFold(mainCommand, "GET"):
 		if len(commands) >= 2 {
-			return app.GET(commands[1])
+			return app.GET(commands[1]), nil
 		}
-		return []byte("-ERR not enough args: Key missing\r\n")
+		return []byte("-ERR not enough args: Key missing\r\n"), nil
 	default:
-		return nil
+		return nil, nil
 	}
-	return nil
-}
-
-// ROLE: handle the SET command
-func (app *App) SET(key, value string) []byte {
-	tempDb[key] = value
-	successResponse := []byte("+OK\r\n")
-	return successResponse
-}
-
-// ROLE: handle the GET command
-func (app *App) GET(key string) []byte {
-	value, ok := tempDb[key]
-	if !ok {
-		return []byte("-1\r\n")
-	}
-
-	return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(value), value))
 }

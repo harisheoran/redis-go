@@ -6,6 +6,8 @@ import (
 	"os"
 )
 
+var db = make(map[string]Value)
+
 type App struct {
 	infoLogger  *log.Logger
 	errorLogger *log.Logger
@@ -63,17 +65,21 @@ func (app *App) handleConnection(connection net.Conn) error {
 		// parse the input using our own Redis RESP parser
 		commands, err := app.respParser(inputdata)
 		if err != nil {
-			app.infoLogger.Println("failed to parse the input data", err)
+			app.errorLogger.Println("failed to parse the input data", err)
 			return err
 		}
 
 		// handle the commands accordingly
-		dataToSend := app.handleCommands(commands)
+		dataToSend, err := app.handleCommands(commands)
+		if err != nil {
+			app.errorLogger.Println("failed to handle the input commands", err)
+			return err
+		}
 
 		// write to the connection
 		err = app.WriteToClient(connection, dataToSend)
 		if err != nil {
-			app.errorLogger.Println("failed to write the data to the client", err)
+			app.errorLogger.Println("failed to write the data to the connection", err)
 			return err
 		}
 	}
