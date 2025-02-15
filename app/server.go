@@ -6,16 +6,12 @@ import (
 	"os"
 )
 
+/*
+INFO: Entry point of the server
+*/
+
+// map to store the data
 var db = make(map[string]Value)
-
-type App struct {
-	infoLogger  *log.Logger
-	errorLogger *log.Logger
-}
-
-// Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
-var _ = net.Listen
-var _ = os.Exit
 
 func main() {
 	// loggers
@@ -49,59 +45,4 @@ func main() {
 		// handle the connection
 		go app.handleConnection(connection)
 	}
-}
-
-// ROLE: handle the connection
-func (app *App) handleConnection(connection net.Conn) error {
-	for {
-		// read the connection input
-		inputdata, err := app.readInput(connection)
-		if err != nil {
-			app.errorLogger.Println("failed to read input from client", err)
-			return err
-		}
-		app.infoLogger.Println("recieved input from client")
-
-		// parse the input using our own Redis RESP parser
-		commands, err := app.respParser(inputdata)
-		if err != nil {
-			app.errorLogger.Println("failed to parse the input data", err)
-			return err
-		}
-
-		// handle the commands accordingly
-		dataToSend, err := app.handleCommands(commands)
-		if err != nil {
-			app.errorLogger.Println("failed to handle the input commands", err)
-			return err
-		}
-
-		// write to the connection
-		err = app.WriteToClient(connection, dataToSend)
-		if err != nil {
-			app.errorLogger.Println("failed to write the data to the connection", err)
-			return err
-		}
-	}
-
-}
-
-// Role: read the data from the client/connection
-func (app *App) readInput(connection net.Conn) ([]byte, error) {
-	buffer := make([]byte, 1024)
-	_, err := connection.Read(buffer)
-	if err != nil {
-		return nil, err
-	}
-	app.infoLogger.Println("Input: ", string(buffer))
-	return buffer, nil
-}
-
-// Role: write data to the client/connection
-func (app *App) WriteToClient(connection net.Conn, dataToSend []byte) error {
-	_, err := connection.Write(dataToSend)
-	if err != nil {
-		return err
-	}
-	return nil
 }

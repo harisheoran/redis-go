@@ -2,8 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -18,19 +18,36 @@ const (
 )
 
 // Redis RESP Parser
-// ROLE:
-// The parser only converts raw input into structured data.
-// It does not execute the command—this is handled separately.
-func (app *App) respParser(input []byte) ([]string, error) {
-	fmt.Println(string(input))
+// ROLE: The parser only converts raw input into structured data.
+// It does not execute the command, commands are handled separately(ops.go).
+func (app *App) RESP(inputdata []byte) ([]byte, error) {
+	// 1. Read: Redis Data type -> Go Data Type
+	commands, err := app.readRESP(inputdata)
+	if err != nil {
+		app.errorLogger.Println("failed to parse the input data", err)
+		return nil, err
+	}
 
+	// 2. Write: Go Data Type -> Execution Handler -> Get response/result
+	result, err := app.writeRESP(commands)
+	if err != nil {
+		app.errorLogger.Println("failed to handle the input commands", err)
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// ROLE: Read parser
+func (app *App) readRESP(input []byte) ([]string, error) {
 	// read the input bytes
-	reader := bufio.NewReader(strings.NewReader(string(input)))
+	reader := bufio.NewReader(bytes.NewReader(input))
 
 	// 1. read a single byte
-	// start with first character which identify its Redis Type
+	// start with first character which identify its Redis Data Type
 	firstSymbol, err := reader.ReadByte()
 	if err != nil {
+		app.errorLogger.Println("failed to read the firstSymbol", err)
 		return nil, err
 	}
 	// single quoted characters are of type rune which is an alias of int32
@@ -63,7 +80,6 @@ func (app *App) readInteger(reader *bufio.Reader) (int, error) {
 		}
 		fullNumber = append(fullNumber, number)
 		if string(fullNumber[len(fullNumber)-1]) == "\r" {
-			fmt.Println("LENGTH is here:", len(string(fullNumber[:len(fullNumber)-1])), len(string(fullNumber[:len(fullNumber)-1])))
 			break
 		}
 	}
@@ -76,44 +92,42 @@ func (app *App) readInteger(reader *bufio.Reader) (int, error) {
 	return int(intLength), nil
 }
 
+// ROLE: read Redis Array Data type
 func (app *App) respHandleArray(reader *bufio.Reader) ([]string, error) {
 	commandArray := make([]string, 0)
 	// 2. read the length of the Array
 	// ex: *4 or *10 or *100
 	length, err := app.readInteger(reader)
 	if err != nil {
+		app.errorLogger.Println("failed to read the length of array", err)
 		return commandArray, err
 	}
-
-	fmt.Println("Length: ", length)
 
 	// 3. read the end of lines after length of the Array
 	// \n
 	reader.ReadByte()
 
-	fmt.Println("Intial length of array: ", len(commandArray))
 	for i := 0; i < int(length); i++ {
 		// 4. read the size symbol
 		// ex: $
 		sizeSymbol, err := reader.ReadByte()
 		if err != nil {
+			app.errorLogger.Println("failed to read the size symbol", err)
 			return commandArray, err
 		}
 		// check and exit here: wrong request
 		if sizeSymbol != '$' {
 			app.infoLogger.Println("invalid request, not as per redis protocol")
-			os.Exit(1)
-		} else {
-			fmt.Println("Size symbol", string(sizeSymbol))
+			return nil, err
 		}
 
-		// 5. read the size of first element
+		// 5. read the size of element
 		// ex: $4
 		size, err := app.readInteger(reader)
 		if err != nil {
+			app.errorLogger.Println("failed to read the size of the element", err)
 			return commandArray, err
 		}
-		fmt.Println("Size: ", size)
 
 		// 5. read the rest of the input: \r\n
 		reader.ReadByte()
@@ -122,13 +136,12 @@ func (app *App) respHandleArray(reader *bufio.Reader) ([]string, error) {
 		element := make([]byte, size)
 		_, err = reader.Read(element)
 		if err != nil {
+			app.errorLogger.Println("failed to read the element", err)
 			return commandArray, err
 		}
 
-		fmt.Println("ADDING: ", string(element))
 		// 7. add commands to our array/slice
 		commandArray = append(commandArray, string(element))
-		fmt.Println(commandArray, len(commandArray))
 
 		// 8. read the last \r\n
 		reader.ReadByte()
@@ -143,11 +156,11 @@ func (app *App) respHandleBulkString() {
 }
 
 /*
-Write RESP Parser
+// Write RESP Parser
 */
 
 // get the output according to input
-func (app *App) handleCommands(commands []string) ([]byte, error) {
+func (app *App) writeRESP(commands []string) ([]byte, error) {
 	mainCommand := commands[0]
 	switch {
 	case strings.EqualFold(mainCommand, "COMMAND"):
@@ -155,40 +168,55 @@ func (app *App) handleCommands(commands []string) ([]byte, error) {
 	case strings.EqualFold(mainCommand, "PING"):
 		return []byte("+PONG\r\n"), nil
 	case strings.EqualFold(mainCommand, "ECHO"):
-		if len(commands) > 1 {
-			size := len(commands[1])
-			res := fmt.Sprintf("$%d\r\n%s\r\n", size, commands[1])
-			return []byte(res), nil
-		}
-		return nil, nil
+		return app.writeRESP_ECHO(commands)
 	case strings.EqualFold(mainCommand, "SET"):
-		if len(commands) >= 5 && strings.EqualFold(commands[3], "PX") {
-			expiry, err := strconv.ParseInt(commands[4], 10, 64)
-			if err != nil {
-				return nil, nil
-			}
-			return app.SET(
-				commands[1],
-				Value{
-					value:      commands[2],
-					expiration: time.Now().Add(time.Duration(expiry) * time.Millisecond),
-				},
-			), nil
-		} else if len(commands) >= 3 {
-			return app.SET(
-				commands[1],
-				Value{
-					value: commands[2],
-				},
-			), nil
-		}
-		return []byte("-ERR not enough args: Key or Value missing\r\n"), nil
+		return app.writeRESP_SET(commands)
 	case strings.EqualFold(mainCommand, "GET"):
-		if len(commands) >= 2 {
-			return app.GET(commands[1]), nil
-		}
-		return []byte("-ERR not enough args: Key missing\r\n"), nil
+		return app.writeRESP_GET(commands)
 	default:
-		return nil, nil
+		return []byte("- ERR send a valid command\r\n"), nil
 	}
+}
+
+// ROLE: handle echo command
+func (app *App) writeRESP_ECHO(commands []string) ([]byte, error) {
+	if len(commands) > 1 {
+		size := len(commands[1])
+		res := fmt.Sprintf("$%d\r\n%s\r\n", size, commands[1])
+		return []byte(res), nil
+	}
+	return nil, nil
+}
+
+// ROLE: Send Commands to command handler(ops.go) and send response
+func (app *App) writeRESP_SET(commands []string) ([]byte, error) {
+	if len(commands) >= 5 && strings.EqualFold(commands[3], "PX") {
+		expiry, err := strconv.ParseInt(commands[4], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		return app.SET(
+			commands[1],
+			Value{
+				value:      commands[2],
+				expiration: time.Now().Add(time.Duration(expiry) * time.Millisecond),
+			},
+		), nil
+	} else if len(commands) >= 3 {
+		return app.SET(
+			commands[1],
+			Value{
+				value: commands[2],
+			},
+		), nil
+	}
+	return []byte("-ERR not enough args: Key or Value missing\r\n"), nil
+}
+
+// ROLE: send commands to handler(ops.go) and get the response
+func (app *App) writeRESP_GET(commands []string) ([]byte, error) {
+	if len(commands) >= 2 {
+		return app.GET(commands[1]), nil
+	}
+	return []byte("-ERR not enough args: Key missing\r\n"), nil
 }

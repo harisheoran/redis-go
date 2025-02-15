@@ -5,15 +5,13 @@ import (
 	"time"
 )
 
-type Value struct {
-	value      string
-	expiration time.Time
-}
+/*
+INFO: Handle the execution of the commands
+*/
 
 // ROLE: handle the SET command
 func (app *App) SET(key string, value Value) []byte {
 	db[key] = value
-	fmt.Println(db)
 	successResponse := []byte("+OK\r\n")
 	return successResponse
 }
@@ -38,5 +36,4 @@ func (app *App) passiveExpiry(expiryTime time.Duration) bool {
 		return true
 	}
 	return false
-
 }
