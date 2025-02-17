@@ -1,19 +1,24 @@
 package main
 
 import (
+	"io"
 	"net"
-	"os"
 )
 
 // ROLE: handle the connection
 // Workflow: Read input -> RESP Parser -> Execute -> Write Output
 func (app *App) handleConnection(connection net.Conn) {
+	defer connection.Close()
 	for {
 		// 1. Read the input from the connection
 		inputdata, err := app.readInput(connection)
 		if err != nil {
-			app.errorLogger.Println("failed to read input from client", err)
-			os.Exit(1)
+			if err == io.EOF {
+				app.errorLogger.Println("client closed the connection", err)
+			} else {
+				app.errorLogger.Println("failed to read input from client", err)
+			}
+			return
 		}
 		app.infoLogger.Println("recieved input from client")
 
@@ -21,14 +26,14 @@ func (app *App) handleConnection(connection net.Conn) {
 		result, err := app.RESP(inputdata)
 		if err != nil {
 			app.errorLogger.Println("failed to parse data using RESP", err)
-			os.Exit(1)
+			return
 		}
 
 		// 4. Write to the connection
 		err = app.WriteToClient(connection, result)
 		if err != nil {
 			app.errorLogger.Println("failed to write the data to the connection", err)
-			os.Exit(1)
+			return
 		}
 	}
 

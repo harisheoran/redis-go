@@ -159,7 +159,7 @@ func (app *App) respHandleBulkString() {
 // Write RESP Parser
 */
 
-// get the output according to input
+// Check the commands -> pass it to the executer(ops.go) -> get the result
 func (app *App) writeRESP(commands []string) ([]byte, error) {
 	mainCommand := commands[0]
 	switch {
@@ -173,6 +173,8 @@ func (app *App) writeRESP(commands []string) ([]byte, error) {
 		return app.writeRESP_SET(commands)
 	case strings.EqualFold(mainCommand, "GET"):
 		return app.writeRESP_GET(commands)
+	case strings.EqualFold(mainCommand, "CONFIG"):
+		return app.writeRESP_CONFIG(commands), nil
 	default:
 		return []byte("- ERR send a valid command\r\n"), nil
 	}
@@ -219,4 +221,38 @@ func (app *App) writeRESP_GET(commands []string) ([]byte, error) {
 		return app.GET(commands[1]), nil
 	}
 	return []byte("-ERR not enough args: Key missing\r\n"), nil
+}
+
+// ROLE: handle CONFIG command
+func (app *App) writeRESP_CONFIG(commands []string) []byte {
+	if len(commands) == 1 {
+		return []byte("- ERR send a valid command missing GET or SET\r\n")
+	} else if len(commands) == 2 && strings.EqualFold(commands[1], "GET") {
+		return []byte("- ERR send a valid command missing dir or dbfilename\r\n")
+	} else if len(commands) == 2 && !strings.EqualFold(commands[1], "GET") {
+		return []byte("- ERR send a valid command missing GET or SET\r\n")
+	}
+
+	if len(commands) == 3 && strings.EqualFold(commands[2], "dir") {
+		return []byte(app.createArrayResponse([]string{"dir", *dir}))
+	} else if len(commands) == 3 && strings.EqualFold(commands[2], "dbfilename") {
+		return []byte(app.createArrayResponse([]string{"dbfilename", *dbFileName}))
+	}
+
+	return []byte("- ERR send a valid command\r\n")
+}
+
+/*
+RESP helper functions
+*/
+// 1. create a Redis protocol Array Response
+func (app *App) createArrayResponse(response []string) string {
+	lengthOfArray := len(response)
+
+	redisResponse := fmt.Sprintf("*%d\r\n", lengthOfArray)
+	for i := 0; i < lengthOfArray; i++ {
+		redisResponse = redisResponse + fmt.Sprintf("$%d\r\n%s\r\n", len(response[i]), string(response[i]))
+	}
+
+	return redisResponse
 }
