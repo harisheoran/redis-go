@@ -15,7 +15,7 @@ INFO: Entry point of the server
 var db = make(map[string]Value)
 
 // dir and dbfilename flags
-var dir = flag.String("dir", "~/.redis/rdb/", "Redis RDB file path")
+var dir = flag.String("dir", ".redis/rdb/", "Redis RDB file path")
 var dbFileName = flag.String("dbfilename", "redis.rdb", "Redis RDB file name")
 
 func main() {
@@ -31,6 +31,10 @@ func main() {
 	}
 
 	app.infoLogger.Println("server starting at port 6379")
+	err := app.DeserializeData()
+	if err != nil {
+		app.errorLogger.Println("THIS is the error ", err)
+	}
 
 	// establish socket connection
 	listner, err := net.Listen("tcp", "0.0.0.0:6379")

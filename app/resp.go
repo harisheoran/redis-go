@@ -175,9 +175,25 @@ func (app *App) writeRESP(commands []string) ([]byte, error) {
 		return app.writeRESP_GET(commands)
 	case strings.EqualFold(mainCommand, "CONFIG"):
 		return app.writeRESP_CONFIG(commands), nil
+	case strings.EqualFold(mainCommand, "KEYS"):
+		return app.writeRESP_KEYS(commands)
+	case strings.EqualFold(mainCommand, "save"):
+		response, err := app.SAVE()
+		return response, err
 	default:
 		return []byte("- ERR send a valid command\r\n"), nil
 	}
+}
+
+// ROLE: handle KEYS command
+func (app *App) writeRESP_KEYS(commands []string) ([]byte, error) {
+	if len(commands) >= 2 && commands[1] == "*" {
+		return app.KEY(), nil
+	} else {
+		return []byte("-ERROR subcommand is missing\r\n"), nil
+	}
+
+	return nil, nil
 }
 
 // ROLE: handle echo command

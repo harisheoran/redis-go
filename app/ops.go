@@ -12,6 +12,11 @@ INFO: Handle the execution of the commands
 // ROLE: handle the SET command
 func (app *App) SET(key string, value Value) []byte {
 	db[key] = value
+	app.infoLogger.Println("DB:", db)
+
+	for _, value := range db {
+		fmt.Println("HERE", value.expiration)
+	}
 	successResponse := []byte("+OK\r\n")
 	return successResponse
 }
@@ -36,4 +41,25 @@ func (app *App) passiveExpiry(expiryTime time.Duration) bool {
 		return true
 	}
 	return false
+}
+
+// ROLE: save the RDB file with the data
+func (app *App) SAVE() ([]byte, error) {
+	err := app.serializeRdbData()
+	if err != nil {
+		return nil, err
+	}
+	return []byte(fmt.Sprintf("+File Saved in file %s at %s\r\n", *dbFileName, *dir)), nil
+}
+
+// get all elements using keys
+func (app *App) KEY() []byte {
+	var keysArray []string
+	if len(db) > 0 {
+		for keys, _ := range db {
+			keysArray = append(keysArray, keys)
+		}
+		return []byte(app.createArrayResponse(keysArray))
+	}
+	return []byte("-ERROR: no data is saved\r\n")
 }
