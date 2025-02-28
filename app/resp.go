@@ -192,8 +192,6 @@ func (app *App) writeRESP_KEYS(commands []string) ([]byte, error) {
 	} else {
 		return []byte("-ERROR subcommand is missing\r\n"), nil
 	}
-
-	return nil, nil
 }
 
 // ROLE: handle echo command
@@ -213,6 +211,7 @@ func (app *App) writeRESP_SET(commands []string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		app.infoLogger.Println("Input Time:", time.Now().Add(time.Duration(expiry)*time.Millisecond))
 		return app.SET(
 			commands[1],
 			Value{

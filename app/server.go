@@ -31,7 +31,7 @@ func main() {
 	}
 
 	app.infoLogger.Println("server starting at port 6379")
-	err := app.DeserializeData()
+	err := app.DeserializeRDB()
 	if err != nil {
 		app.errorLogger.Println("THIS is the error ", err)
 	}

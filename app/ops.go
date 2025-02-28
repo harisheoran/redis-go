@@ -13,10 +13,6 @@ INFO: Handle the execution of the commands
 func (app *App) SET(key string, value Value) []byte {
 	db[key] = value
 	app.infoLogger.Println("DB:", db)
-
-	for _, value := range db {
-		fmt.Println("HERE", value.expiration)
-	}
 	successResponse := []byte("+OK\r\n")
 	return successResponse
 }

@@ -56,15 +56,10 @@ func (app *App) serializeRdbData() error {
 }
 
 func (app *App) checkRDBfile() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	rdbPath := path.Join(homeDir, *dir, *dbFileName)
+	rdbPath := path.Join(*dir, *dbFileName)
 
 	// check file exist, if not then create the file
-	_, err = os.Stat(rdbPath)
+	_, err := os.Stat(rdbPath)
 	if errors.Is(err, os.ErrNotExist) {
 		// create the file
 		_, err := os.Create(rdbPath)
@@ -153,7 +148,7 @@ func (app *App) writeRdbFile(rdbPath string) error {
 		return err
 	}
 
-	// 6. actual key:pair valuesz
+	// 6. actual key:pair values
 	for key, value := range db {
 		if value.expiration.IsZero() {
 			err := app.writeKeyValuePair(writer, key, value)
@@ -253,11 +248,13 @@ func (app *App) lengthEncoding(length int) ([]byte, error) {
 	// case 1: 1 byte length: 6 bit actual length and 00 represent it
 	// 6 bit can take upto 64 length
 	if length < 1<<6 {
+		app.infoLogger.Println("1 Byte length encoded")
 		return []byte{byte(length)}, nil
 	}
 
-	// case 2: 2 byte length: 14 bit actual length and
+	// case 2: 2 byte length: 14 bit actual length
 	if length < 1<<14 {
+		app.infoLogger.Println("2 Byte length encoded")
 		return []byte{
 			byte(length>>8) | 0x40,
 			byte(length),
@@ -267,6 +264,7 @@ func (app *App) lengthEncoding(length int) ([]byte, error) {
 	// case 3: 5 byte length: last 4 byte(32 bit) actual length,
 	// first byte is used to represent(only 2MSB bit, discard last 6 bits)
 	if length <= 1<<32-1 {
+		app.infoLogger.Println("5 Byte length decoded")
 		buffer := make([]byte, 5)
 		buffer[0] = 0x80
 		binary.LittleEndian.PutUint32(buffer[1:], uint32(length))
@@ -329,9 +327,10 @@ func (app *App) getExpiryHashTableSize() int {
 ///////////////////////////////////////////////////
 /*
 ROLE: Deserialize the RDB data
+Read RDB file -> Decode Data -> Save it in-memory
 */
 ///////////////////////////////////////////////////
-func (app *App) DeserializeData() error {
+func (app *App) DeserializeRDB() error {
 	// check file if exist
 	rdbPath, err := app.checkRDBfile()
 	if err != nil {
@@ -346,11 +345,11 @@ func (app *App) DeserializeData() error {
 	defer file.Close()
 
 	// create bufio reader to read the file
-	reader := bufio.NewReader(file)
+	reader := file
 
 	// 1. check header to verify that is redis file
 	headerBuffer := make([]byte, 9)
-	if _, err = reader.Read(headerBuffer); err != nil {
+	if _, err = io.ReadFull(reader, headerBuffer); err != nil {
 		return err
 	}
 	if string(headerBuffer) != fmt.Sprintf("%s%s", REDIS, REDIS_VERSION) {
@@ -359,28 +358,37 @@ func (app *App) DeserializeData() error {
 
 	// 2. read the metadata section
 	for {
-		readedByte, err := reader.ReadByte()
+		readedByte := make([]byte, 1)
+		_, err := io.ReadFull(reader, readedByte)
 		if err != nil {
 			return err
 		}
 
-		if readedByte == FE {
+		if readedByte[0] == FE {
 			break
 		}
 	}
 
+	// Database section
 	// 3. read DB Index
-	dbInd, err := reader.ReadByte()
+
+	dbByte := make([]byte, 1)
+	_, err = io.ReadFull(reader, dbByte)
 	if err != nil {
 		return err
 	}
-	app.infoLogger.Println("DBINDEX: ", dbInd)
+	app.infoLogger.Println("DBINDEX: ", dbByte)
 
 	// 4. read the Hashtable Size
-	if _, err = reader.ReadByte(); err != nil {
+	// Reading the FB
+	FBbyte := make([]byte, 1)
+	if _, err = io.ReadFull(reader, FBbyte); err != nil {
 		return err
 	}
-	mainTableSize, err := reader.ReadByte()
+	// the actual size
+
+	mainTableSize := make([]byte, 1)
+	_, err = io.ReadFull(reader, mainTableSize)
 	if err != nil {
 		return err
 	}
@@ -393,70 +401,180 @@ func (app *App) DeserializeData() error {
 	//
 	//
 
-	ttlHashTableSize, err := reader.ReadByte()
+	// read the size of hashtable
+	ttlHashTableSizeByte := make([]byte, 1)
+	_, err = io.ReadFull(reader, ttlHashTableSizeByte)
 	if err != nil {
 		return err
 	}
-	app.infoLogger.Println("TTL Hash Table Size", ttlHashTableSize)
+	app.infoLogger.Println("TTL Hash Table Size", ttlHashTableSizeByte)
 
 	// 5. Actual Key:Value pairs
-	for {
-		readedByte, err := reader.ReadByte()
+	for i := 0; i < int(mainTableSize[0]); i++ {
+		// case 1: can be FC or FD (tells about timeout expiry)
+		// case 2: if it is not with time expiry than it is value type byte
+		readedByte := make([]byte, 1)
+		_, err := io.ReadFull(reader, readedByte)
 		if err != nil {
 			return err
 		}
 
-		switch readedByte {
+		// check FC or FD for if it has expiry time with Key Value pair
+		switch readedByte[0] {
 		case FC:
+			app.infoLogger.Println("FC Type")
+			key, value, err := app.helperDeserializeExpiryKeyValue(reader)
+			if err != nil {
+				app.errorLogger.Println("Failed to deserialize", err)
+				return err
+			}
+			app.infoLogger.Println("Saving FC key value pair from RDB file...", "KEY:", key, "VALUE:", value)
+			db[key] = value
 		case FD:
+			app.infoLogger.Println("FD type")
+			key, value, err := app.helperDeserializeExpiryKeyValue(reader)
+			if err != nil {
+				app.errorLogger.Println("Failed to deserialize", err)
+				return err
+			}
+			app.infoLogger.Println("Saving FD key value pair from RDB file...", "KEY:", key, "VALUE:", value)
+			db[key] = value
 		default:
-			app.DeserializeKeyValuePair(*reader)
+			app.infoLogger.Println("Without expiry: ", readedByte)
+			key, value, err := app.helperDeserailizeKeyValue(reader, readedByte)
+			if err != nil {
+				app.errorLogger.Println("Failed to deserialize", err)
+				return err
+			}
+			app.infoLogger.Println("saving key value pair from RDB file...", "KEY:", key, "VALUE:", value.value)
+			db[key] = value
 		}
 	}
-
 	return nil
 }
 
-// helper
-func (app *App) DeserializeKeyValuePair(reader bufio.Reader) error {
-	// read type of the value
-	valueTypeByte, err := reader.ReadByte()
+/*
+Helper Functions for Deserialization
+*/
+// ROLE: Helper
+// 1. Deserialize Key Value Pair which have expiry timeout
+func (app *App) helperDeserializeExpiryKeyValue(reader io.Reader) (string, Value, error) {
+	// read the timestamp
+	timeStampByteBuffer := make([]byte, 8)
+	_, err := io.ReadFull(reader, timeStampByteBuffer)
 	if err != nil {
-		return err
+		return "", Value{}, err
+	}
+	timeExpiryBinary := binary.LittleEndian.Uint64(timeStampByteBuffer)
+	timeExpiry := time.UnixMilli(int64(timeExpiryBinary))
+	app.infoLogger.Println("Decoded time", timeExpiry)
+
+	// read the value type byte
+	valueTypeByte := make([]byte, 1)
+	_, err = io.ReadFull(reader, valueTypeByte)
+	if err != nil {
+		return "", Value{}, err
+	}
+	app.infoLogger.Println("Value type Byte", valueTypeByte)
+
+	// decode the key and value
+	key, value, err := app.helperDeserailizeKeyValue(reader, valueTypeByte)
+	if err != nil {
+		return "", Value{}, err
 	}
 
-	switch valueTypeByte {
+	value.expiration = timeExpiry
+
+	return key, value, nil
+}
+
+// ROLE: Helper
+// 2. Deserialize KEY VALUE pair
+func (app *App) helperDeserailizeKeyValue(reader io.Reader, valueTypeByte []byte) (string, Value, error) {
+	// read the key
+	key, err := app.helperDeserializeString(reader)
+	if err != nil {
+		return "", Value{}, err
+	}
+	app.infoLogger.Println("KEY decoded:", key)
+
+	var value string
+	// read the value
+	switch valueTypeByte[0] {
 	case STRING_TYPE:
-		app.helperDeserializeString(reader)
+		app.infoLogger.Println("Decoding... Found String type")
+		value, err = app.helperDeserializeString(reader)
+		if err != nil {
+			return "", Value{}, err
+		}
+		app.infoLogger.Println("VALUE decoded:", value)
 	case HASH_TYPE:
 	case LIST_TYPE:
 	case SORTED_SET_TYPE:
 	case SET_TYPE:
 	default:
+		app.infoLogger.Println("Not a valid type to decode")
 	}
 
-	return err
+	valueData := Value{
+		value: value,
+	}
+	return key, valueData, nil
 }
 
-/*
-Helper Function for Deserialization
-*/
-// 1. ROLE: Deseraialize the String types
-func (app *App) helperDeserializeString(reader bufio.Reader) error {
-	//mask = "0xC0"
-	// decode the length of the KEY
-	lengthBuffer := make([]byte, 1)
-	if _, err := reader.Read(lengthBuffer); err != nil {
-		return err
+// ROLE: Helper
+// 3. Deseraialize the String types helper
+func (app *App) helperDeserializeString(reader io.Reader) (string, error) {
+	length, err := app.helperdecodeLength(reader)
+	if err != nil {
+		return "", err
+	}
+	app.infoLogger.Println("Decoded Length:", length)
+
+	stringByte := make([]byte, length)
+	if _, err = io.ReadFull(reader, stringByte); err != nil {
+		return "", err
 	}
 
-	if lengthBuffer[0]&0xC0 == 0x00 {
-		fmt.Println("HELL")
-	}
-
-	return nil
+	return string(stringByte), nil
 }
 
-func (app *App) decodeLength() {
+// ROLE: Helper
+// to decode the length
+func (app *App) helperdecodeLength(reader io.Reader) (int, error) {
+	// read the first byte of the length
+	buffer := make([]byte, 1)
+	if _, err := io.ReadFull(reader, buffer); err != nil {
+		return -1, err
+	}
 
+	firstByte := buffer[0]
+	// AND with 1100 0000 we will MSB bits
+	prefixByte := firstByte & 0xC0
+	switch prefixByte {
+	case 0x00:
+		app.infoLogger.Println("1 Byte length decoded")
+		return int(firstByte & 0x3F), nil
+	case 0x40:
+		app.infoLogger.Println("2 Byte length decoded")
+		nextByte := make([]byte, 1)
+		_, err := io.ReadFull(reader, nextByte)
+		if err != nil {
+			return -1, err
+		}
+		// prefixByte & 0x3F : it gives 6 bit and remove MSB of 01 which
+		// is not needed in actual length
+		// << 8 : moves the 6 bit left side and make it 16 bit and
+		// the OR with next byte gives full length byte
+		return int(firstByte&0x3F)<<8 | int(nextByte[0]), nil
+	case 0x80:
+		app.infoLogger.Println("5 Byte length decoded")
+		nextBytes := make([]byte, 4)
+		if _, err := io.ReadFull(reader, nextBytes); err != nil {
+			return -1, err
+		}
+		return int(binary.LittleEndian.Uint32(nextBytes)), nil
+	default:
+		return -1, fmt.Errorf("Invalid Length")
+	}
 }

@@ -46,7 +46,6 @@ func (app *App) readInput(connection net.Conn) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	app.infoLogger.Println("Input: ", string(buffer))
 	return buffer, nil
 }
 
