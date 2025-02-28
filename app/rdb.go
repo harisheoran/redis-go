@@ -58,7 +58,7 @@ func (app *App) serializeRdbData() error {
 func (app *App) checkRDBfile() (string, error) {
 	rdbPath := path.Join(*dir, *dbFileName)
 
-	// check file exist, if not then create the file
+	// check file exist, if not then create the RDB file
 	_, err := os.Stat(rdbPath)
 	if errors.Is(err, os.ErrNotExist) {
 		// create the file
