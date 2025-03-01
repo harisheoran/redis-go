@@ -62,11 +62,16 @@ func (app *App) KEY() []byte {
 
 // INFO replication execution
 func (app *App) INFO() []byte {
-	// length of the key, value and :
-	length := 5
-	length = length + len(role)
+	rolePair := fmt.Sprintf("%s:%s\r\n", ROLE, role)
+	masterIdPair := fmt.Sprintf("%s:%s\r\n", MASTER_REPL_ID, "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb")
+	masterOffsetPair := fmt.Sprintf("%s:%s", MASTER_REPL_OFFSET, "0")
 
-	response := fmt.Sprintf("$%d\r\n%s:%s\r\n", length, ROLE, role)
+	return app.createBulkStringResponse(rolePair + masterIdPair + masterOffsetPair)
+}
 
+// ROLE: create bulk string response
+func (app *App) createBulkStringResponse(responseStrings string) []byte {
+	length := len(responseStrings)
+	response := fmt.Sprintf("$%d\r\n%s\r\n", length, responseStrings)
 	return []byte(response)
 }
