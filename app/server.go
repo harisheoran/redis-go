@@ -60,7 +60,7 @@ func main() {
 
 	err := app.DeserializeRDB()
 	if err != nil {
-		app.errorLogger.Println("THIS is the error ", err)
+		app.errorLogger.Println("failed to deserialize the rdb file", err)
 	}
 
 	address := fmt.Sprintf("0.0.0.0:%s", *port)

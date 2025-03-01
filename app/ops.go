@@ -55,7 +55,7 @@ func (app *App) KEY() []byte {
 		for keys, _ := range db {
 			keysArray = append(keysArray, keys)
 		}
-		return []byte(app.createArrayResponse(keysArray))
+		return []byte(app.createRESPArray(keysArray))
 	}
 	return []byte("-ERROR: no data is saved\r\n")
 }

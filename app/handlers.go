@@ -29,6 +29,8 @@ func (app *App) handleConnection(connection net.Conn) {
 			return
 		}
 
+		app.infoLogger.Println("RESP: Write result", string(result))
+
 		// 4. Write to the connection
 		err = app.WriteToClient(connection, result)
 		if err != nil {

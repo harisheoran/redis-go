@@ -58,6 +58,7 @@ func (app *App) readRESP(input []byte) ([]string, error) {
 	// so we are comparing integer values
 	switch firstSymbol {
 	case ARRAY:
+		app.infoLogger.Println("RESP: Array type input")
 		return app.respHandleArray(reader)
 	case BULK_STRING:
 		app.respHandleBulkString()
@@ -187,6 +188,9 @@ func (app *App) writeRESP(commands []string) ([]byte, error) {
 			return app.INFO(), nil
 		}
 		return ErrorResponse, nil
+	case strings.EqualFold(mainCommand, "REPLCONF"):
+		fmt.Println("Reaching here")
+		return []byte("+OK\r\n"), nil
 	default:
 		return []byte("- ERR send a valid command\r\n"), nil
 	}
@@ -256,9 +260,9 @@ func (app *App) writeRESP_CONFIG(commands []string) []byte {
 	}
 
 	if len(commands) == 3 && strings.EqualFold(commands[2], "dir") {
-		return []byte(app.createArrayResponse([]string{"dir", *dir}))
+		return []byte(app.createRESPArray([]string{"dir", *dir}))
 	} else if len(commands) == 3 && strings.EqualFold(commands[2], "dbfilename") {
-		return []byte(app.createArrayResponse([]string{"dbfilename", *dbFileName}))
+		return []byte(app.createRESPArray([]string{"dbfilename", *dbFileName}))
 	}
 
 	return []byte("- ERR send a valid command\r\n")
@@ -267,14 +271,14 @@ func (app *App) writeRESP_CONFIG(commands []string) []byte {
 /*
 RESP helper functions
 */
-// 1. create a Redis protocol Array Response
-func (app *App) createArrayResponse(response []string) string {
-	lengthOfArray := len(response)
+// 1. create a Redis protocol Array
+func (app *App) createRESPArray(data []string) string {
+	lengthOfArray := len(data)
 
-	redisResponse := fmt.Sprintf("*%d\r\n", lengthOfArray)
+	respArray := fmt.Sprintf("*%d\r\n", lengthOfArray)
 	for i := 0; i < lengthOfArray; i++ {
-		redisResponse = redisResponse + fmt.Sprintf("$%d\r\n%s\r\n", len(response[i]), string(response[i]))
+		respArray = respArray + fmt.Sprintf("$%d\r\n%s\r\n", len(data[i]), string(data[i]))
 	}
 
-	return redisResponse
+	return respArray
 }
