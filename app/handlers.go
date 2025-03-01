@@ -20,7 +20,7 @@ func (app *App) handleConnection(connection net.Conn) {
 			}
 			return
 		}
-		app.infoLogger.Println("recieved input from client")
+		app.infoLogger.Println("recieved input from client", string(inputdata))
 
 		// 2. Parse the input using our own Redis RESP parser
 		result, err := app.RESP(inputdata)

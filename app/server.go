@@ -41,12 +41,21 @@ func main() {
 			role = "slave"
 		}
 	})
+
 	// loggers
 	infoLogger := log.New(os.Stdout, "INFO: ", log.Lshortfile)
 	errorLogger := log.New(os.Stderr, "ERROR: ", log.Lshortfile)
 	app := App{
 		infoLogger:  infoLogger,
 		errorLogger: errorLogger,
+	}
+
+	if role == SLAVE {
+		err := app.SendHandshake()
+		if err != nil {
+			app.errorLogger.Println("failed to send the handshake", err)
+			return
+		}
 	}
 
 	err := app.DeserializeRDB()
