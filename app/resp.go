@@ -17,6 +17,8 @@ const (
 	ARRAY         = '*'
 )
 
+var ErrorResponse = []byte("- ERR send a valid command\r\n")
+
 // Redis RESP Parser
 // ROLE: The parser only converts raw input into structured data.
 // It does not execute the command, commands are handled separately(ops.go).
@@ -181,8 +183,10 @@ func (app *App) writeRESP(commands []string) ([]byte, error) {
 		response, err := app.SAVE()
 		return response, err
 	case strings.EqualFold(mainCommand, "info"):
-
-		return app.handleINFOreplication(commands), nil
+		if len(commands) >= 2 && strings.EqualFold(commands[1], "replication") {
+			return app.INFO(), nil
+		}
+		return ErrorResponse, nil
 	default:
 		return []byte("- ERR send a valid command\r\n"), nil
 	}
@@ -260,15 +264,6 @@ func (app *App) writeRESP_CONFIG(commands []string) []byte {
 	return []byte("- ERR send a valid command\r\n")
 }
 
-// ROLE: handler INFO command with replication
-func (app *App) handleINFOreplication(commands []string) []byte {
-	if len(commands) >= 2 && strings.EqualFold(commands[1], "replication") {
-		return app.INFOreplication()
-	}
-
-	return nil
-}
-
 /*
 RESP helper functions
 */
@@ -282,17 +277,4 @@ func (app *App) createArrayResponse(response []string) string {
 	}
 
 	return redisResponse
-}
-
-// 2. create bulk string response
-func (app *App) createBulkStringResponse(response []string) string {
-	//$11\r\nrole:master\r\n
-	var length int
-	for _, value := range response {
-		length = length + len(value)
-	}
-
-	res := fmt.Sprintf("$%d\r\n%s%s%s\r\n", length, response[0], response[1], response[2])
-
-	return res
 }

@@ -15,15 +15,30 @@ INFO: Entry point of the server
 // map to store the data
 var db = make(map[string]Value)
 
-// dir and dbfilename flags
+const (
+	MASTER = "master"
+	SLAVE  = "slave"
+	ROLE   = "role"
+)
+
+// be default
+var role = MASTER
+
+// flags
 var dir = flag.String("dir", ".redis/rdb/", "Redis RDB file path")
 var dbFileName = flag.String("dbfilename", "redis.rdb", "Redis RDB file name")
 var port = flag.String("port", "6379", "Redis-Go server port")
+var replicaof = flag.String("replicaof", "localhost 6379", "info about the master redis-go replica")
 
 func main() {
 	// parse the flags
 	flag.Parse()
 
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "replicaof" {
+			role = "slave"
+		}
+	})
 	// loggers
 	infoLogger := log.New(os.Stdout, "INFO: ", log.Lshortfile)
 	errorLogger := log.New(os.Stderr, "ERROR: ", log.Lshortfile)

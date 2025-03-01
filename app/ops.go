@@ -61,9 +61,12 @@ func (app *App) KEY() []byte {
 }
 
 // INFO replication execution
-func (app *App) INFOreplication() []byte {
-	// role:master
-	res := app.createBulkStringResponse([]string{"role", ":", "master"})
+func (app *App) INFO() []byte {
+	// length of the key, value and :
+	length := 5
+	length = length + len(role)
 
-	return []byte(res)
+	response := fmt.Sprintf("$%d\r\n%s:%s\r\n", length, ROLE, role)
+
+	return []byte(response)
 }
