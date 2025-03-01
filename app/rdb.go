@@ -56,6 +56,10 @@ func (app *App) serializeRdbData() error {
 }
 
 func (app *App) checkRDBfile() (string, error) {
+	/*homePath, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}*/
 	rdbPath := path.Join(*dir, *dbFileName)
 
 	// check file exist, if not then create the RDB file
