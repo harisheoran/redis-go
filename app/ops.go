@@ -59,3 +59,11 @@ func (app *App) KEY() []byte {
 	}
 	return []byte("-ERROR: no data is saved\r\n")
 }
+
+// INFO replication execution
+func (app *App) INFOreplication() []byte {
+	// role:master
+	res := app.createBulkStringResponse([]string{"role", ":", "master"})
+
+	return []byte(res)
+}

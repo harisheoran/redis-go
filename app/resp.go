@@ -180,6 +180,9 @@ func (app *App) writeRESP(commands []string) ([]byte, error) {
 	case strings.EqualFold(mainCommand, "save"):
 		response, err := app.SAVE()
 		return response, err
+	case strings.EqualFold(mainCommand, "info"):
+
+		return app.handleINFOreplication(commands), nil
 	default:
 		return []byte("- ERR send a valid command\r\n"), nil
 	}
@@ -257,6 +260,15 @@ func (app *App) writeRESP_CONFIG(commands []string) []byte {
 	return []byte("- ERR send a valid command\r\n")
 }
 
+// ROLE: handler INFO command with replication
+func (app *App) handleINFOreplication(commands []string) []byte {
+	if len(commands) >= 2 && strings.EqualFold(commands[1], "replication") {
+		return app.INFOreplication()
+	}
+
+	return nil
+}
+
 /*
 RESP helper functions
 */
@@ -270,4 +282,17 @@ func (app *App) createArrayResponse(response []string) string {
 	}
 
 	return redisResponse
+}
+
+// 2. create bulk string response
+func (app *App) createBulkStringResponse(response []string) string {
+	//$11\r\nrole:master\r\n
+	var length int
+	for _, value := range response {
+		length = length + len(value)
+	}
+
+	res := fmt.Sprintf("$%d\r\n%s%s%s\r\n", length, response[0], response[1], response[2])
+
+	return res
 }
