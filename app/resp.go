@@ -189,8 +189,9 @@ func (app *App) writeRESP(commands []string) ([]byte, error) {
 		}
 		return ErrorResponse, nil
 	case strings.EqualFold(mainCommand, "REPLCONF"):
-		fmt.Println("Reaching here")
 		return []byte("+OK\r\n"), nil
+	case strings.EqualFold(mainCommand, "PSYNC"):
+		return []byte("+FULLRESYNC <REPL_ID> 0\r\n"), nil
 	default:
 		return []byte("- ERR send a valid command\r\n"), nil
 	}

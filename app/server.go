@@ -38,7 +38,7 @@ func main() {
 
 	flag.Visit(func(f *flag.Flag) {
 		if f.Name == "replicaof" {
-			role = "slave"
+			role = SLAVE
 		}
 	})
 

@@ -18,7 +18,7 @@ func (app *App) SendHandshake() error {
 	if err != nil {
 		return err
 	}
-	//defer connection.Close()
+	defer connection.Close()
 
 	// 1. send PING command to Master
 	PING_COMMAND := "*1\r\n$4\r\nPING\r\n"
@@ -60,6 +60,21 @@ func (app *App) SendHandshake() error {
 		return nil
 	}
 	app.infoLogger.Println("Successfully recieved response from the second REPLCONF handshake", string(responseSecondREPLCONF))
+
+	// *3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n
+	// +FULLRESYNC <REPL_ID> 0\r\n
+	psyncArrayReq := app.createRESPArray([]string{"PSYNC", "?", "-1"})
+	if _, err := connection.Write([]byte(psyncArrayReq)); err != nil {
+		return err
+	}
+	app.infoLogger.Println("Successfully send the PSYNC handshake")
+
+	psyncRes := make([]byte, 54)
+	if _, err = connection.Read(psyncRes); err != nil {
+		return nil
+	}
+
+	app.infoLogger.Println("Successfully recieved response from the PSYNC handshake", string(psyncRes))
 
 	return nil
 }
