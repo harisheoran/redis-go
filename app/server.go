@@ -16,11 +16,13 @@ INFO: Entry point of the server
 var db = make(map[string]Value)
 
 const (
-	MASTER             = "master"
-	SLAVE              = "slave"
-	ROLE               = "role"
-	MASTER_REPL_ID     = "master_replid"
-	MASTER_REPL_OFFSET = "master_repl_offset"
+	MASTER                   = "master"
+	SLAVE                    = "slave"
+	ROLE                     = "role"
+	MASTER_REPL_ID           = "master_replid"
+	MASTER_REPL_OFFSET       = "master_repl_offset"
+	MASTER_REPL_ID_VALUE     = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
+	MASTER_REPL_OFFSET_VALUE = "0"
 )
 
 // be default

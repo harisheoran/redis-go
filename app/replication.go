@@ -61,8 +61,6 @@ func (app *App) SendHandshake() error {
 	}
 	app.infoLogger.Println("Successfully recieved response from the second REPLCONF handshake", string(responseSecondREPLCONF))
 
-	// *3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n
-	// +FULLRESYNC <REPL_ID> 0\r\n
 	psyncArrayReq := app.createRESPArray([]string{"PSYNC", "?", "-1"})
 	if _, err := connection.Write([]byte(psyncArrayReq)); err != nil {
 		return err

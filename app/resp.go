@@ -191,7 +191,7 @@ func (app *App) writeRESP(commands []string) ([]byte, error) {
 	case strings.EqualFold(mainCommand, "REPLCONF"):
 		return []byte("+OK\r\n"), nil
 	case strings.EqualFold(mainCommand, "PSYNC"):
-		return []byte("+FULLRESYNC <REPL_ID> 0\r\n"), nil
+		return app.writeRESP_PSYNC(), nil
 	default:
 		return []byte("- ERR send a valid command\r\n"), nil
 	}
@@ -267,6 +267,11 @@ func (app *App) writeRESP_CONFIG(commands []string) []byte {
 	}
 
 	return []byte("- ERR send a valid command\r\n")
+}
+
+func (app *App) writeRESP_PSYNC() []byte {
+	response := fmt.Sprintf("+FULLRESYNC %s %s\r\n", MASTER_REPL_ID_VALUE, MASTER_REPL_OFFSET_VALUE)
+	return []byte(response)
 }
 
 /*
