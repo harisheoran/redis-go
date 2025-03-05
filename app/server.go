@@ -13,7 +13,10 @@ INFO: Entry point of the server
 */
 
 // map to store the data
-var db = make(map[string]Value)
+var (
+	db           = make(map[string]Value)
+	isFULLRESYNC = false
+)
 
 const (
 	MASTER                   = "master"

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net"
 	"strings"
@@ -74,5 +75,28 @@ func (app *App) SendHandshake() error {
 
 	app.infoLogger.Println("Successfully recieved response from the PSYNC handshake", string(psyncRes))
 
+	rdbFileBuffer := make([]byte, 1024)
+	if _, err = connection.Read(rdbFileBuffer); err != nil {
+		return nil
+	}
+	app.infoLogger.Println("Successfully recieved the rdb file from master", string(rdbFileBuffer))
+
 	return nil
+}
+
+// send by master
+func (app *App) createfullResyncRDBFileResponse() ([]byte, error) {
+	//	$<length_of_file>\r\n<contents_of_file>
+	hexContent := "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
+
+	byteContent, err := hex.DecodeString(hexContent)
+	if err != nil {
+		return nil, err
+	}
+
+	size := len(byteContent)
+
+	response := fmt.Sprintf("$%d\r\n%s", size, string(byteContent))
+
+	return []byte(response), nil
 }

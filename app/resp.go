@@ -270,6 +270,7 @@ func (app *App) writeRESP_CONFIG(commands []string) []byte {
 }
 
 func (app *App) writeRESP_PSYNC() []byte {
+	isFULLRESYNC = true
 	response := fmt.Sprintf("+FULLRESYNC %s %s\r\n", MASTER_REPL_ID_VALUE, MASTER_REPL_OFFSET_VALUE)
 	return []byte(response)
 }

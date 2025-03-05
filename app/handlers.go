@@ -37,6 +37,23 @@ func (app *App) handleConnection(connection net.Conn) {
 			app.errorLogger.Println("failed to write the data to the connection", err)
 			return
 		}
+
+		// master operations
+		if role == MASTER && isFULLRESYNC {
+			fullResyncResponse, err := app.createfullResyncRDBFileResponse()
+			if err != nil {
+				app.errorLogger.Println("failed to send the FULLRESYNC rdb file to slave", err)
+				return
+			}
+
+			err = app.WriteToClient(connection, fullResyncResponse)
+			if err != nil {
+				app.errorLogger.Println("failed to write the data to the connection", err)
+				return
+			}
+			app.infoLogger.Println("Successfully send the RDB file for full resync.")
+			isFULLRESYNC = false
+		}
 	}
 
 }
