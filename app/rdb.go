@@ -83,7 +83,7 @@ func (app *App) writeRdbFile(rdbPath string) error {
 		[]byte(REDIS + REDIS_VERSION),
 	}
 
-	file, err := os.OpenFile(rdbPath, os.O_WRONLY, 0644)
+	file, err := os.OpenFile(rdbPath, os.O_WRONLY, 0640)
 	if err != nil {
 		return err
 	}

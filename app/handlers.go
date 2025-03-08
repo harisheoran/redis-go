@@ -23,37 +23,19 @@ func (app *App) handleConnection(connection net.Conn) {
 		app.infoLogger.Println("recieved input from client", string(inputdata))
 
 		// 2. Parse the input using our own Redis RESP parser
-		result, err := app.RESP(inputdata)
+		commands, err := app.RESP(inputdata)
 		if err != nil {
 			app.errorLogger.Println("failed to parse data using RESP", err)
 			return
 		}
+		app.infoLogger.Println("RESP: Write result", commands)
 
-		app.infoLogger.Println("RESP: Write result", string(result))
-
-		// 4. Write to the connection
-		err = app.WriteToClient(connection, result)
+		err = app.ExecuteCommands(commands, connection)
 		if err != nil {
-			app.errorLogger.Println("failed to write the data to the connection", err)
+			app.errorLogger.Println("failed to execute the commands", err)
 			return
 		}
 
-		// master operations
-		if role == MASTER && isFULLRESYNC {
-			fullResyncResponse, err := app.createfullResyncRDBFileResponse()
-			if err != nil {
-				app.errorLogger.Println("failed to send the FULLRESYNC rdb file to slave", err)
-				return
-			}
-
-			err = app.WriteToClient(connection, fullResyncResponse)
-			if err != nil {
-				app.errorLogger.Println("failed to write the data to the connection", err)
-				return
-			}
-			app.infoLogger.Println("Successfully send the RDB file for full resync.")
-			isFULLRESYNC = false
-		}
 	}
 
 }

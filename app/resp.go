@@ -3,10 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"strconv"
-	"strings"
-	"time"
 )
 
 const (
@@ -22,22 +19,14 @@ var ErrorResponse = []byte("- ERR send a valid command\r\n")
 // Redis RESP Parser
 // ROLE: The parser only converts raw input into structured data.
 // It does not execute the command, commands are handled separately(ops.go).
-func (app *App) RESP(inputdata []byte) ([]byte, error) {
+func (app *App) RESP(inputdata []byte) ([]string, error) {
 	// 1. Read: Redis Data type -> Go Data Type
 	commands, err := app.readRESP(inputdata)
 	if err != nil {
 		app.errorLogger.Println("failed to parse the input data", err)
 		return nil, err
 	}
-
-	// 2. Write: Go Data Type -> Execution Handler -> Get response/result
-	result, err := app.writeRESP(commands)
-	if err != nil {
-		app.errorLogger.Println("failed to handle the input commands", err)
-		return nil, err
-	}
-
-	return result, nil
+	return commands, nil
 }
 
 // ROLE: Read parser
@@ -156,136 +145,4 @@ func (app *App) respHandleArray(reader *bufio.Reader) ([]string, error) {
 
 func (app *App) respHandleBulkString() {
 
-}
-
-/*
-// Write RESP Parser
-*/
-
-// Check the commands -> pass it to the executer(ops.go) -> get the result
-func (app *App) writeRESP(commands []string) ([]byte, error) {
-	mainCommand := commands[0]
-	switch {
-	case strings.EqualFold(mainCommand, "COMMAND"):
-		return []byte("+PONG\r\n"), nil
-	case strings.EqualFold(mainCommand, "PING"):
-		return []byte("+PONG\r\n"), nil
-	case strings.EqualFold(mainCommand, "ECHO"):
-		return app.writeRESP_ECHO(commands)
-	case strings.EqualFold(mainCommand, "SET"):
-		return app.writeRESP_SET(commands)
-	case strings.EqualFold(mainCommand, "GET"):
-		return app.writeRESP_GET(commands)
-	case strings.EqualFold(mainCommand, "CONFIG"):
-		return app.writeRESP_CONFIG(commands), nil
-	case strings.EqualFold(mainCommand, "KEYS"):
-		return app.writeRESP_KEYS(commands)
-	case strings.EqualFold(mainCommand, "save"):
-		response, err := app.SAVE()
-		return response, err
-	case strings.EqualFold(mainCommand, "info"):
-		if len(commands) >= 2 && strings.EqualFold(commands[1], "replication") {
-			return app.INFO(), nil
-		}
-		return ErrorResponse, nil
-	case strings.EqualFold(mainCommand, "REPLCONF"):
-		return []byte("+OK\r\n"), nil
-	case strings.EqualFold(mainCommand, "PSYNC"):
-		return app.writeRESP_PSYNC(), nil
-	default:
-		return []byte("- ERR send a valid command\r\n"), nil
-	}
-}
-
-// ROLE: handle KEYS command
-func (app *App) writeRESP_KEYS(commands []string) ([]byte, error) {
-	if len(commands) >= 2 && commands[1] == "*" {
-		return app.KEY(), nil
-	} else {
-		return []byte("-ERROR subcommand is missing\r\n"), nil
-	}
-}
-
-// ROLE: handle echo command
-func (app *App) writeRESP_ECHO(commands []string) ([]byte, error) {
-	if len(commands) > 1 {
-		size := len(commands[1])
-		res := fmt.Sprintf("$%d\r\n%s\r\n", size, commands[1])
-		return []byte(res), nil
-	}
-	return nil, nil
-}
-
-// ROLE: Send Commands to command handler(ops.go) and send response
-func (app *App) writeRESP_SET(commands []string) ([]byte, error) {
-	if len(commands) >= 5 && strings.EqualFold(commands[3], "PX") {
-		expiry, err := strconv.ParseInt(commands[4], 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		app.infoLogger.Println("Input Time:", time.Now().Add(time.Duration(expiry)*time.Millisecond))
-		return app.SET(
-			commands[1],
-			Value{
-				value:      commands[2],
-				expiration: time.Now().Add(time.Duration(expiry) * time.Millisecond),
-			},
-		), nil
-	} else if len(commands) >= 3 {
-		return app.SET(
-			commands[1],
-			Value{
-				value: commands[2],
-			},
-		), nil
-	}
-	return []byte("-ERR not enough args: Key or Value missing\r\n"), nil
-}
-
-// ROLE: send commands to handler(ops.go) and get the response
-func (app *App) writeRESP_GET(commands []string) ([]byte, error) {
-	if len(commands) >= 2 {
-		return app.GET(commands[1]), nil
-	}
-	return []byte("-ERR not enough args: Key missing\r\n"), nil
-}
-
-// ROLE: handle CONFIG command
-func (app *App) writeRESP_CONFIG(commands []string) []byte {
-	if len(commands) == 1 {
-		return []byte("- ERR send a valid command missing GET or SET\r\n")
-	} else if len(commands) == 2 && strings.EqualFold(commands[1], "GET") {
-		return []byte("- ERR send a valid command missing dir or dbfilename\r\n")
-	} else if len(commands) == 2 && !strings.EqualFold(commands[1], "GET") {
-		return []byte("- ERR send a valid command missing GET or SET\r\n")
-	}
-
-	if len(commands) == 3 && strings.EqualFold(commands[2], "dir") {
-		return []byte(app.createRESPArray([]string{"dir", *dir}))
-	} else if len(commands) == 3 && strings.EqualFold(commands[2], "dbfilename") {
-		return []byte(app.createRESPArray([]string{"dbfilename", *dbFileName}))
-	}
-
-	return []byte("- ERR send a valid command\r\n")
-}
-
-func (app *App) writeRESP_PSYNC() []byte {
-	isFULLRESYNC = true
-	response := fmt.Sprintf("+FULLRESYNC %s %s\r\n", MASTER_REPL_ID_VALUE, MASTER_REPL_OFFSET_VALUE)
-	return []byte(response)
-}
-
-/*
-RESP helper functions
-*/
-// 1. create a Redis protocol Array
-func (app *App) createRESPArray(data []string) string {
-	lengthOfArray := len(data)
-
-	respArray := fmt.Sprintf("*%d\r\n", lengthOfArray)
-	for i := 0; i < lengthOfArray; i++ {
-		respArray = respArray + fmt.Sprintf("$%d\r\n%s\r\n", len(data[i]), string(data[i]))
-	}
-
-	return respArray
 }

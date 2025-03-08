@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 )
 
 /*
@@ -16,6 +17,15 @@ INFO: Entry point of the server
 var (
 	db           = make(map[string]Value)
 	isFULLRESYNC = false
+	// be default
+	role             = MASTER
+	masterConnection net.Conn
+	slaveConnections = []net.Conn{}
+	// flags
+	dir        = flag.String("dir", ".redis/rdb/", "Redis RDB file path")
+	dbFileName = flag.String("dbfilename", "redis.rdb", "Redis RDB file name")
+	port       = flag.String("port", "6379", "Redis-Go server port")
+	replicaof  = flag.String("replicaof", "localhost 6379", "info about the master redis-go replica")
 )
 
 const (
@@ -28,15 +38,6 @@ const (
 	MASTER_REPL_OFFSET_VALUE = "0"
 )
 
-// be default
-var role = MASTER
-
-// flags
-var dir = flag.String("dir", ".redis/rdb/", "Redis RDB file path")
-var dbFileName = flag.String("dbfilename", "redis.rdb", "Redis RDB file name")
-var port = flag.String("port", "6379", "Redis-Go server port")
-var replicaof = flag.String("replicaof", "localhost 6379", "info about the master redis-go replica")
-
 func main() {
 	// parse the flags
 	flag.Parse()
@@ -47,9 +48,11 @@ func main() {
 		}
 	})
 
+	prefixInfo := fmt.Sprintf("INFO: %s ", strings.ToUpper(role))
+	prefixError := fmt.Sprintf("ERROR: %s ", strings.ToUpper(role))
 	// loggers
-	infoLogger := log.New(os.Stdout, "INFO: ", log.Lshortfile)
-	errorLogger := log.New(os.Stderr, "ERROR: ", log.Lshortfile)
+	infoLogger := log.New(os.Stdout, prefixInfo, log.Lshortfile)
+	errorLogger := log.New(os.Stderr, prefixError, log.Lshortfile)
 	app := App{
 		infoLogger:  infoLogger,
 		errorLogger: errorLogger,

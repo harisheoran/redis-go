@@ -19,7 +19,6 @@ func (app *App) SendHandshake() error {
 	if err != nil {
 		return err
 	}
-	defer connection.Close()
 
 	// 1. send PING command to Master
 	PING_COMMAND := "*1\r\n$4\r\nPING\r\n"
@@ -72,7 +71,6 @@ func (app *App) SendHandshake() error {
 	if _, err = connection.Read(psyncRes); err != nil {
 		return nil
 	}
-
 	app.infoLogger.Println("Successfully recieved response from the PSYNC handshake", string(psyncRes))
 
 	rdbFileBuffer := make([]byte, 1024)
@@ -80,6 +78,18 @@ func (app *App) SendHandshake() error {
 		return nil
 	}
 	app.infoLogger.Println("Successfully recieved the rdb file from master", string(rdbFileBuffer))
+
+	go func(connection net.Conn) {
+		defer connection.Close()
+		for {
+			buffer := make([]byte, 1024)
+			if _, err = connection.Read(buffer); err != nil {
+				app.errorLogger.Println("failed to read from master", err)
+				return
+			}
+			app.infoLogger.Println("Successfully recieved SET from master", string(buffer))
+		}
+	}(connection)
 
 	return nil
 }
